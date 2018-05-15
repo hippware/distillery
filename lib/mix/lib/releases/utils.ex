@@ -258,7 +258,8 @@ defmodule Mix.Releases.Utils do
   @spec get_apps(Mix.Releases.Release.t) :: [{atom, String.t}] | {:error, String.t}
   # Gets all applications which are part of the release application tree
   def get_apps(%Release{name: name, applications: apps} = release) do
-    children = get_apps(App.new(name), [])
+    loaded_deps = Mix.Dep.loaded([])
+    children = get_apps(App.new(name, loaded_deps), loaded_deps, [])
     base_apps =
       Enum.reduce(apps, children, fn
         _, {:error, reason} ->
@@ -270,7 +271,7 @@ defmodule Mix.Releases.Utils do
                 # Override start type
                 Enum.map(acc, fn %App{name: ^a} = app -> %{app | start_type: start_type}; app -> app end)
               else
-                get_apps(App.new(a, start_type), acc)
+                get_apps(App.new(a, start_type, loaded_deps), loaded_deps, acc)
               end
             :else ->
               {:error, {:apps, {:invalid_start_type, a, start_type}}}
@@ -279,7 +280,7 @@ defmodule Mix.Releases.Utils do
           if Enum.any?(acc, fn %App{name: app} -> a == app end) do
             acc
           else
-            get_apps(App.new(a), acc)
+            get_apps(App.new(a, loaded_deps), loaded_deps, acc)
           end
       end)
     # Correct any ERTS libs which should be pulled from the correct
@@ -370,9 +371,9 @@ defmodule Mix.Releases.Utils do
         apps
     end
   end
-  defp get_apps(nil, acc), do: Enum.uniq(acc)
-  defp get_apps({:error, _} = err, _acc), do: err
-  defp get_apps(%App{} = app, acc) do
+  defp get_apps(nil, _loaded_deps, acc), do: Enum.uniq(acc)
+  defp get_apps({:error, _} = err, _loaded_deps, _acc), do: err
+  defp get_apps(%App{} = app, loaded_deps, acc) do
     new_acc =
       app.applications
       |> Enum.concat(app.included_applications)
@@ -383,11 +384,11 @@ defmodule Mix.Releases.Utils do
           if Enum.any?(acc, fn %App{name: app} -> a == app end) do
             acc
           else
-            case App.new(a, load_type) do
+            case App.new(a, load_type, loaded_deps) do
               nil ->
                 acc
               %App{} = app ->
-                case get_apps(app, acc) do
+                case get_apps(app, loaded_deps, acc) do
                   {:error, _} = err ->
                     err
                   children ->
@@ -401,11 +402,11 @@ defmodule Mix.Releases.Utils do
           if Enum.any?(acc, fn %App{name: app} -> a == app end) do
             acc
           else
-            case App.new(a) do
+            case App.new(a, loaded_deps) do
               nil ->
                 acc
               %App{} = app ->
-                case get_apps(app, acc) do
+                case get_apps(app, loaded_deps, acc) do
                   {:error, _} = err ->
                     err
                   children ->

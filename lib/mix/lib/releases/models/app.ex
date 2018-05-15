@@ -25,16 +25,16 @@ defmodule Mix.Releases.App do
   @doc """
   Create a new Application struct from an application name
   """
-  @spec new(atom) :: nil | __MODULE__.t | {:error, String.t}
-  def new(name), do: new(name, nil)
+  @spec new(atom, [Mix.Dep.t()]) :: nil | __MODULE__.t | {:error, String.t}
+  def new(name, loaded_deps), do: new(name, nil, loaded_deps)
 
   @doc """
-  Same as new/1, but specify the application's start type
+  Same as new/2, but specify the application's start type
   """
-  @spec new(atom, start_type | nil) :: nil | __MODULE__.t | {:error, String.t}
-  def new(name, start_type)
+  @spec new(atom, start_type | nil, [Mix.Dep.t()]) :: nil | __MODULE__.t | {:error, String.t}
+  def new(name, start_type, loaded_deps)
     when is_atom(name) and start_type in [nil, :permanent, :temporary, :transient, :load, :none] do
-    dep = Enum.find(Mix.Dep.loaded([]), fn %Mix.Dep{app: ^name} -> true; _ -> false end)
+    dep = Enum.find(loaded_deps, fn %Mix.Dep{app: ^name} -> true; _ -> false end)
     cond do
       is_nil(dep) ->
         do_new(name, start_type)
@@ -44,7 +44,7 @@ defmodule Mix.Releases.App do
         do_new(name, start_type)
     end
   end
-  def new(name, start_type), do: {:error, {:apps, {:invalid_start_type, name, start_type}}}
+  def new(name, start_type, _loaded_deps), do: {:error, {:apps, {:invalid_start_type, name, start_type}}}
 
   defp do_new(name, start_type) do
     _ = Application.load(name)
